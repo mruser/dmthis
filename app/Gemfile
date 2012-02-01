@@ -1,11 +1,18 @@
-source "http://rubygems.org"
+source 'http://rubygems.org'
 
-gem "pry"
-gem "oauth"
-gem "tweetstream"
-gem "yajl-ruby"
+gem 'linecache19', '0.5.13'
+gem 'ruby-debug-base19', '0.11.26'
+gem 'ruby-debug19', :require => 'ruby-debug'
 
-gem "activerecord", :require => "active_record"
-gem "sqlite3"
+gem 'pry'
+gem 'oauth'
+gem 'twitter'
+gem 'tweetstream'
+gem 'yajl-ruby'
 
-gem "standalone_migrations"
+gem 'activerecord', :require => 'active_record'
+gem 'sqlite3'
+
+gem 'log4r'
+
+gem 'standalone_migrations'
