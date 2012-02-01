@@ -30,6 +30,54 @@ def configure_twitter
   end
 end
 
+def format_message_from_status(status)
+  # make sure we don't trunc the sender 
+  # or urls (any token with a / will suffice for now)
+  from_text = "@#{status.user.screen_name} "
+  text = shorten_but_urls(status.text, 140 - from_text.length)
+
+  return "#{from_text}#{text}"
+end
+
+def shorten_but_urls(text, length_available)
+  if text.length > length_available
+    tokenized_text = text.split
+    shortenable_tokens = tokenized_text.collect do |val|
+      next val unless val.include? '/'
+    end
+    ellip = '...'
+    to_shorten = text.length + ellip.length - length_available
+    shortened = false
+    shortenable_tokens.reverse!.collect! do |val|
+      next if val == nil
+      if to_shorten > 0
+        val_length = val.length
+        shorten_by = [val_length, to_shorten].min
+        val = val.slice(0, val_length-shorten_by)
+        to_shorten -= shorten_by + 1
+        if !shortened && val_length != shorten_by 
+          shortened = true
+          next "#{val}#{ellip}"
+        else
+          next val
+        end
+      end
+    end
+    shortenable_tokens.reverse!
+
+    return tokenized_text.collect.with_index { |val, i|
+      val = shortenable_tokens[i] if shortenable_tokens[i] != nil
+      if !shortened && shortenable_tokens.length-1 > i && shortenable_tokens[i+1] == ''
+        shortened = true
+        val << ellip
+      end
+      val
+    }.reject {|val| next true if val == '' }.join(' ').sub(" #{ellip}", ellip).strip
+  else
+    text.strip
+  end
+end
+
 if __FILE__ == $PROGRAM_NAME
   ActiveRecord::Base.establish_connection($db_config)
   configure_twitter
@@ -41,6 +89,7 @@ if __FILE__ == $PROGRAM_NAME
   dmclient = TweetStream::Client.new
   dmclient.on_direct_message do |dm|
     sender = dm.sender
+    return if sender.id == $config.account_id
     logger.info("DM from #{sender.screen_name}: #{dm.text}")
     logger.debug(dm)
     # who might they want to follow/unfollow
@@ -72,10 +121,16 @@ if __FILE__ == $PROGRAM_NAME
     puts err
     logger.error(err.inspect)
   end
-  # TODO: daemonize
-  #puts "Listening..."
-  #dmclient.userstream
-  #exit
+
+  trap("CLD") {
+    pid = Process.wait
+    puts "Child pid #{pid}: terminated"
+    exit 1
+  }
+
+  Kernel::fork do
+    dmclient.userstream
+  end
 
   lclient = TweetStream::Client.new
   lclient.on_error do |err|
@@ -85,8 +140,8 @@ if __FILE__ == $PROGRAM_NAME
   lclient.follow(user_ids_to_follow) do |status|
     # lookup who is interested in this status and DM them
     DMFollow.where(rgt_id: status.user.id).each do |dmf|
-      # TODO: Trunc needs to be a heuristic
-      Twitter.direct_message_create(dmf.lft_id, "@#{status.user.screen_name} #{status.text}"[0..139])
+      message = format_message_from_status status
+      Twitter.direct_message_create(dmf.lft_id, message)
     end
   end
 
