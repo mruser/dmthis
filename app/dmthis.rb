@@ -67,12 +67,12 @@ def shorten_but_urls(text, length_available)
 
     return tokenized_text.collect.with_index { |val, i|
       val = shortenable_tokens[i] if shortenable_tokens[i] != nil
-      if !shortened && shortenable_tokens.length-1 > i && shortenable_tokens[i+1] == ''
+      if !shortened && shortenable_tokens.length-1 > i && shortenable_tokens[i+1].empty?
         shortened = true
         val << ellip
       end
       val
-    }.reject {|val| next true if val == '' }.join(' ').sub(" #{ellip}", ellip).strip
+    }.reject {|val| val.empty? }.join(' ').sub(" #{ellip}", ellip).strip
   else
     text.strip
   end
@@ -89,14 +89,18 @@ if __FILE__ == $PROGRAM_NAME
   dmclient = TweetStream::Client.new
   dmclient.on_direct_message do |dm|
     sender = dm.sender
-    return if sender.id == $config.account_id
+    next if sender.id == $config['twitter']['account_id']
     logger.info("DM from #{sender.screen_name}: #{dm.text}")
     logger.debug(dm)
     # who might they want to follow/unfollow
-    dm.text.scan(/\@(\p{L}+)/) do |group|
+    dm.text.scan(/\@([\p{L}0-9_]{3,15})/) do |group|
       # lookup ID for sn
       sn = group[0]
-      id = Twitter.user(sn).id
+      begin
+        id = Twitter.user(sn).id
+      rescue
+        logger.error("Unable to lookup user: #{sn}, #{$!}")
+      end
       # add or remove from table
       inst = DMFollow.where(lft: sender.screen_name,
                             lft_id: sender.id,
@@ -129,21 +133,44 @@ if __FILE__ == $PROGRAM_NAME
   }
 
   Kernel::fork do
-    dmclient.userstream
+    running = true
+    while running
+      begin
+        dmclient.userstream
+      rescue HTTP::Parser::Error
+        logging.error("HTTP::Parser::Error #{$!}")
+        next
+      rescue
+        running = false
+        raise
+      end
+    end
   end
 
   lclient = TweetStream::Client.new
   lclient.on_error do |err|
     logger.error(err)
   end
+  # TODO: This will need to reload periodically or after dmfollow is updated
   user_ids_to_follow = DMFollow.select('DISTINCT rgt_id').collect { |inst| inst.rgt_id }
-  lclient.follow(user_ids_to_follow) do |status|
-    # lookup who is interested in this status and DM them
-    DMFollow.where(rgt_id: status.user.id).each do |dmf|
-      message = format_message_from_status status
-      Twitter.direct_message_create(dmf.lft_id, message)
+   
+  running = true
+  while running
+    begin
+      lclient.follow(user_ids_to_follow) do |status|
+        # lookup who is interested in this status and DM them
+        DMFollow.where(rgt_id: status.user.id).each do |dmf|
+          message = format_message_from_status status
+          Twitter.direct_message_create(dmf.lft_id, message)
+        end
+      end
+    rescue HTTP::Parser::Error
+      logging.error("HTTP::Parser::Error #{$!}")
+      next
+    rescue
+      running = false
+      raise
     end
   end
-
   
 end
