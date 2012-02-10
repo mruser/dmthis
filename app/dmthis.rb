@@ -1,7 +1,5 @@
 #!/usr/bin/env ruby
 # encoding: UTF-8
-require 'rubygems'
-require 'bundler/setup'
 require 'active_record'
 require 'tweetstream'
 require 'twitter'
@@ -138,7 +136,7 @@ if __FILE__ == $PROGRAM_NAME
       begin
         dmclient.userstream
       rescue HTTP::Parser::Error
-        logging.error("HTTP::Parser::Error #{$!}")
+        logger.error("HTTP::Parser::Error #{$!}")
         next
       rescue
         running = false
@@ -165,7 +163,7 @@ if __FILE__ == $PROGRAM_NAME
         end
       end
     rescue HTTP::Parser::Error
-      logging.error("HTTP::Parser::Error #{$!}")
+      logger.error("HTTP::Parser::Error #{$!}")
       next
     rescue
       running = false
