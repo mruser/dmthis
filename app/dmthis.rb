@@ -12,6 +12,12 @@ logger.outputters = Outputter.stdout
 $config = YAML::load(File.open(File.join(File.dirname(__FILE__), 'config.yml')))[ENV['ENV'] || 'development']
 $db_config = YAML::load(File.open(File.join(File.dirname(__FILE__), 'db', 'config.yml')))[ENV['ENV'] || 'development']
 
+STOP_WORDS = %w{ stop block no unfollow }.join '|'
+START_WORDS = %w{ start go follow begin }.join '|'
+
+$start_words_re = Regexp.new /\b(#{START_WORDS})\b/
+$stop_words_re = Regexp.new /\b(#{STOP_WORDS})\b/
+
 def configure_twitter
   conf_proc = Proc.new { |conf|
     twitter_conf = $config['twitter']
@@ -70,7 +76,7 @@ def shorten_but_urls(text, length_available)
         val << ellip
       end
       val
-    }.reject {|val| val.empty? }.join(' ').sub(" #{ellip}", ellip).strip
+    }.reject { &:empty? }.join(' ').sub(" #{ellip}", ellip).strip
   else
     text.strip
   end
@@ -85,13 +91,45 @@ if __FILE__ == $PROGRAM_NAME
     puts inst.rgt
   end
   dmclient = TweetStream::Client.new
-  dmclient.on_direct_message do |dm|
-    sender = dm.sender
+  on_action = Proc.new { |message|
+    logger.debug(message)
+    text = message.text
+    if message[:sender]
+      sender = message.sender
+      logger.info("DM from #{sender.screen_name}: #{message.text}")
+    else
+      sender = message.user
+      logger.info("status from #{sender.screen_name}: #{message.text}")
+      # remove @account before processing; also next if not contained
+      next unless text.gsub!(/\@#{$config['twitter']['screen_name']} /i, '')
+    end
     next if sender.id == $config['twitter']['account_id']
-    logger.info("DM from #{sender.screen_name}: #{dm.text}")
-    logger.debug(dm)
+
+    # check to make sure we're being followed
+    # friendships/lookup
+    begin
+      rel = Twitter.friendship($config['twitter']['account_id'], sender.id)
+      logger.debug(rel)
+      if !rel.target.following
+        logger.info("not followed by #{sender.screen_name}")
+        next
+      end
+    rescue
+      logger.error("Unable to lookup relationship: #{$!}")
+    end
+
+    # check for action words
+    action = nil
+    if text.match($start_words_re)
+      action = :start
+    elsif text.match($stop_words_re)
+      action = :stop
+    end
+
+    next if not action
+
     # who might they want to follow/unfollow
-    dm.text.scan(/\@([\p{L}0-9_]{3,15})/) do |group|
+    text.scan(/\@([\p{L}0-9_]{3,15})/) do |group|
       # lookup ID for sn
       sn = group[0]
       begin
@@ -104,39 +142,53 @@ if __FILE__ == $PROGRAM_NAME
                             lft_id: sender.id,
                             rgt: sn,
                             rgt_id: id).first_or_initialize
-      if inst.new_record?
+      if action == :start && inst.new_record?
         logger.debug("Creating DMFollow: lft: #{sender.screen_name}," +
                      "lft_id: #{sender.id}, rgt: #{sn}," +
                      "rgt_id: #{id}")
         inst.save
-      else
+      elsif inst && action == :stop
         # remove it
         inst.delete
         logger.debug("Removed DMFollow: lft: #{sender.screen_name}," +
                      "lft_id: #{sender.id}, rgt: #{sn}," +
                      "rgt_id: #{id}")
+      else
+        # noop
+        next
       end
+      # notify parent process to reload
+      Process.kill(Process.ppid, 'HUP')
     end
-  end
+  }
 
+  dmclient.on_timeline_status &on_action
+  dmclient.on_direct_message &on_action
   dmclient.on_error do |err|
     puts err
     logger.error(err.inspect)
   end
 
-  trap("CLD") {
+  # parent traps
+  trap('CLD') do
     pid = Process.wait
-    puts "Child pid #{pid}: terminated"
+    logger.error("Child pid #{pid}: terminated")
     exit 1
-  }
-
+  end
+  
   Kernel::fork do
     running = true
     while running
       begin
-        dmclient.userstream
+        dmclient.start('', extra_stream_parameters: 
+                       {host: 'userstream.twitter.com', 
+                        path: '/2/user.json',
+                        replies: 'all'
+                       }
+                      )
       rescue HTTP::Parser::Error
         logger.error("HTTP::Parser::Error #{$!}")
+        dmclient.stop
         next
       rescue
         running = false
@@ -149,13 +201,21 @@ if __FILE__ == $PROGRAM_NAME
   lclient.on_error do |err|
     logger.error(err)
   end
-  # TODO: This will need to reload periodically or after dmfollow is updated
-  user_ids_to_follow = DMFollow.select('DISTINCT rgt_id').collect { |inst| inst.rgt_id }
+  # update_user_ids after an interval (easy) or after updates (TODO)
+  def update_user_ids
+    $user_ids_to_follow = DMFollow.select('DISTINCT rgt_id').collect { |inst| inst.rgt_id }
+  end
+
+  UPDATE_USER_IDS_INTERVAL = 30
+  lclient.on_interval(UPDATE_USER_IDS_INTERVAL) do
+    update_user_ids
+  end
    
   running = true
   while running
     begin
-      lclient.follow(user_ids_to_follow) do |status|
+      update_user_ids
+      lclient.follow($user_ids_to_follow) do |status|
         # lookup who is interested in this status and DM them
         DMFollow.where(rgt_id: status.user.id).each do |dmf|
           message = format_message_from_status status
