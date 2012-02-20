@@ -1,0 +1,18 @@
+body {
+  margin-top: 80px;
+}
+
+.notehead {
+    color: #f5f5f5;
+    font-size: 3em;
+    line-height: 2em;
+    font-weight: bold;
+    position: relative;
+    z-index: -1;
+    top: -1em;
+    height: 10px;
+}
+
+h1.mainhead span {
+    font-size: 0.8em;
+}
