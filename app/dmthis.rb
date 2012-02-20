@@ -4,8 +4,9 @@ require 'active_record'
 require 'tweetstream'
 require 'twitter'
 require 'log4r'
-include Log4r
+require './models'
 
+include Log4r
 logger = Logger.new 'main'
 logger.outputters = Outputter.stdout
 
@@ -36,7 +37,7 @@ def configure_twitter
 end
 
 def format_message_from_status(status)
-  # make sure we don't trunc the sender 
+  # make sure we don't trunc the sender
   # or urls (any token with a / will suffice for now)
   from_text = "@#{status.user.screen_name} "
   text = shorten_but_urls(status.text, 140 - from_text.length)
@@ -60,7 +61,7 @@ def shorten_but_urls(text, length_available)
         shorten_by = [val_length, to_shorten].min
         val = val.slice(0, val_length-shorten_by)
         to_shorten -= shorten_by + 1
-        if !shortened && val_length != shorten_by 
+        if !shortened && val_length != shorten_by
           shortened = true
           next "#{val}#{ellip}"
         else
@@ -72,7 +73,8 @@ def shorten_but_urls(text, length_available)
 
     return tokenized_text.collect.with_index { |val, i|
       val = shortenable_tokens[i] if shortenable_tokens[i] != nil
-      if !shortened && shortenable_tokens.length-1 > i && shortenable_tokens[i+1].empty?
+      if !shortened && shortenable_tokens.length-1 > i &&
+                       shortenable_tokens[i+1].empty?
         shortened = true
         val << ellip
       end
@@ -86,8 +88,7 @@ end
 if __FILE__ == $PROGRAM_NAME
   ActiveRecord::Base.establish_connection($db_config)
   configure_twitter
- 
-  require './models'
+
   dmclient = TweetStream::Client.new
   on_action = Proc.new { |message|
     logger.debug(message)
@@ -164,9 +165,10 @@ if __FILE__ == $PROGRAM_NAME
         # noop
         next
       end
-      
+
       # send a status message
-      follow_sns = DMFollow.where(lft_id: sender.id).collect { |inst| inst.rgt }
+      follow_sns = DMFollow.where(lft_id: sender.id)
+                           .collect { |inst| inst.rgt }
       if follow_sns.length
         message = "Now following: #{follow_sns.join(',')}"
       else
@@ -190,13 +192,13 @@ if __FILE__ == $PROGRAM_NAME
     logger.error("Child pid #{pid}: terminated")
     exit 1
   end
-  
+
   Kernel::fork do
     running = true
     while running
       begin
-        dmclient.start('', extra_stream_parameters: 
-                       {host: 'userstream.twitter.com', 
+        dmclient.start('', extra_stream_parameters:
+                       {host: 'userstream.twitter.com',
                         path: '/2/user.json',
                         replies: 'all'
                        }
@@ -220,14 +222,15 @@ if __FILE__ == $PROGRAM_NAME
   end
   # update_user_ids after an interval (easy) or after updates (TODO)
   def update_user_ids
-    $user_ids_to_follow = DMFollow.select('DISTINCT rgt_id').collect { |inst| inst.rgt_id }
+    $user_ids_to_follow = DMFollow.select('DISTINCT rgt_id')
+                                  .collect { |inst| inst.rgt_id }
   end
 
   UPDATE_USER_IDS_INTERVAL = 30
   lclient.on_interval(UPDATE_USER_IDS_INTERVAL) do
     update_user_ids
   end
-   
+
   running = true
   while running
     begin
@@ -247,5 +250,4 @@ if __FILE__ == $PROGRAM_NAME
       raise
     end
   end
-  
 end
