@@ -14,6 +14,7 @@ $db_config = YAML::load(File.open(File.join(File.dirname(__FILE__), 'db', 'confi
 
 STOP_WORDS = %w{ stop block no unfollow }.join '|'
 START_WORDS = %w{ start go follow begin }.join '|'
+MAX_FOLLOWERS = $config['max_followers']
 
 $start_words_re = Regexp.new /\b(#{START_WORDS})\b/
 $stop_words_re = Regexp.new /\b(#{STOP_WORDS})\b/
@@ -26,7 +27,7 @@ def configure_twitter
     conf.oauth_token = twitter_conf['main_oauth_token']
     conf.oauth_token_secret = twitter_conf['main_oauth_token_secret']
   }
-  Twitter.configure &conf_proc
+  Twitter.configure(&conf_proc)
   TweetStream.configure do |conf|
     conf_proc.call(conf)
     conf.auth_method = :oauth
@@ -76,7 +77,7 @@ def shorten_but_urls(text, length_available)
         val << ellip
       end
       val
-    }.reject { &:empty? }.join(' ').sub(" #{ellip}", ellip).strip
+    }.reject(&:empty?).join(' ').sub(" #{ellip}", ellip).strip
   else
     text.strip
   end
@@ -87,9 +88,6 @@ if __FILE__ == $PROGRAM_NAME
   configure_twitter
  
   require './models'
-  DMFollow.all.each do |inst|
-    puts inst.rgt
-  end
   dmclient = TweetStream::Client.new
   on_action = Proc.new { |message|
     logger.debug(message)
@@ -129,7 +127,7 @@ if __FILE__ == $PROGRAM_NAME
     next if not action
 
     # who might they want to follow/unfollow
-    text.scan(/\@([\p{L}0-9_]{3,15})/) do |group|
+    text.scan(/\@([\p{L}0-9_]{2,15})/) do |group|
       # lookup ID for sn
       sn = group[0]
       begin
@@ -143,6 +141,15 @@ if __FILE__ == $PROGRAM_NAME
                             rgt: sn,
                             rgt_id: id).first_or_initialize
       if action == :start && inst.new_record?
+        # Get current list of followers
+        current_followers = DMFollow.where(lft_id: sender.id)
+        if current_followers.length == MAX_FOLLOWERS
+          # reply not possible via DM
+          Twitter.direct_message_create(sender.id,
+                                        "Unable to add #{sn}, a " +
+                                        "max of #{MAX_FOLLOWERS} are allowed")
+          next
+        end
         logger.debug("Creating DMFollow: lft: #{sender.screen_name}," +
                      "lft_id: #{sender.id}, rgt: #{sn}," +
                      "rgt_id: #{id}")
@@ -157,8 +164,16 @@ if __FILE__ == $PROGRAM_NAME
         # noop
         next
       end
-      # notify parent process to reload
-      Process.kill(Process.ppid, 'HUP')
+      
+      # send a status message
+      follow_sns = DMFollow.where(lft_id: sender.id).collect { |inst| inst.rgt }
+      if follow_sns.length
+        message = "Now following: #{follow_sns.join(',')}"
+      else
+        message = "Not following anyone"
+      end
+      Twitter.direct_message_create(sender.id, message)
+
     end
   }
 
@@ -188,7 +203,9 @@ if __FILE__ == $PROGRAM_NAME
                       )
       rescue HTTP::Parser::Error
         logger.error("HTTP::Parser::Error #{$!}")
-        dmclient.stop
+        if dmclient.running?
+          dmclient.stop_stream
+        end
         next
       rescue
         running = false
@@ -218,7 +235,7 @@ if __FILE__ == $PROGRAM_NAME
       lclient.follow($user_ids_to_follow) do |status|
         # lookup who is interested in this status and DM them
         DMFollow.where(rgt_id: status.user.id).each do |dmf|
-          message = format_message_from_status status
+          message = format_message_from_status(status)
           Twitter.direct_message_create(dmf.lft_id, message)
         end
       end
