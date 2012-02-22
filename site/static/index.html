@@ -4,7 +4,9 @@
         <title>@DMthis &mdash; never miss an important tweet again</title>
         <link rel="stylesheet" href="css/bootstrap.min.css" type="text/css" />
         <link rel="stylesheet" href="css/screen.css" type="text/css" />
-        <!--<script src="http://platform.twitter.com/anywhere.js?id=na87HWGbOIBgts2vxzGKw&v=1" type="text/javascript"></script>-->
+        <script
+         src="http://platform.twitter.com/anywhere.js?id=na87HWGbOIBgts2vxzGKw&v=1"
+         type="text/javascript"></script>
     </head>
     <body>
         <div class="container">
@@ -12,12 +14,14 @@
                 <div class="span12">
                     <div class="hero-unit">
                         <h1 class="mainhead"><span>@</span>DMthis</h1>
+                        <div class="hero-image">
+                            <img src="img/screen.png" />
+                        </div>
                         <h2>Never miss an important tweet again</h2>
-                        <p>Don't fill up your SMS inbox with mobile tweets
-                           when push notifications via DM are an option. With @DMthis,
-                           our robot will directly message tweets by users
-                           you want.
-                        </p>
+                        <p>Don't fill up your SMS inbox with mobile tweets when
+                        push notifications via DM are the best option. With
+                        @DMthis, our robot will directly message tweets by users
+                        you want. <em>Get started below.</em>  </p>
                     </div>
                 </div>
             </div>
@@ -29,27 +33,36 @@
                     <span id="follow-dmthis"></span>
                     <script type="text/javascript">
                     twttr.anywhere(function (T) {
-                        T('#follow-dmthis').followButton("dmthis");
                     });
                     </script>
                 </div>
                 <div class="span6">
                     <div class="notehead">Step 2</div>
-                    <h3>Start Following</h3>
-                    <p>Then, tweet "start" @DMthis with @screen_names you want to be notified about</p>
+                    <h3>Start notifications</h3>
+                    <p>Then, tweet "start" to @DMthis with @screen_names you
+                    want to be notified about</p>
                     <div id="tbox"></div>
-                    <script type="text/javascript">
-                    twttr.anywhere(function (T) {
-                        T("#tbox").tweetBox({
-                            height: 100,
-                            width: 460,
-                            label: "",
-                            defaultContent: "@DMthis start @<twitter screen name here>"
-                        });
-                    });
-                    </script>
                 </div>
             </div>
+            <footer>
+            <div>
+                <p>Questions? Comments? Follow @mruser</p>
+                <p>&copy; 2012, source coming soon to a <a
+                    href="http://github.com/mruser">github near you</a>.</p>
+            </div>
+            </footer>
         </div>
+        <script type="text/javascript">
+        twttr.anywhere(function (T) {
+            T('#follow-dmthis').followButton("dmthis");
+            T("#tbox").tweetBox({
+                height: 100,
+                width: 460,
+                label: "",
+                defaultContent: "@DMthis start @<twitter screen name here>"
+            });
+            T("footer").hovercards();
+        });
+        </script>
     </body>
 </html>

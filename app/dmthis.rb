@@ -205,9 +205,8 @@ if __FILE__ == $PROGRAM_NAME
                       )
       rescue HTTP::Parser::Error
         logger.error("HTTP::Parser::Error #{$!}")
-        if dmclient.running?
-          dmclient.stop_stream
-        end
+        # needs backoff method
+        dmclient.stop_stream
         next
       rescue
         running = false

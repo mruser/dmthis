@@ -16,3 +16,18 @@ body {
 h1.mainhead span {
     font-size: 0.8em;
 }
+
+.hero-image {
+    float: right;
+    position: relative;
+    top: -3px;
+}
+
+footer div {
+    color: #aaa;
+    margin-top: 3em;
+}
+footer div p {
+    font-size: 0.8em;
+    text-align: center;
+}
