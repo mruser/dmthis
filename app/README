@@ -1,0 +1,17 @@
+DMthis README
+
+DMthis is a primarily a Twitter bot that has two functions:
+ 1) Listens to @<name> statuses for instructions on what accounts to "follow"
+ 2) Listens to stream containing status for "followed" users. Upon receipt, 
+    truncates these statuses and sends them to "following" users via DM.
+
+Requirements
+ * Ruby >= 1.9.3
+ * Libraries: See Gemfile
+
+N.B.
+This is a slow work in progress for me to try my hand at Ruby. I'd like to make 
+this more object-oriented and tested at some point, practical usage depending.
+
+License
+See LICENSE

@@ -1,3 +1,8 @@
+PATH
+  remote: .
+  specs:
+    dmthis (0.0.1)
+
 GEM
   remote: http://rubygems.org/
   specs:
@@ -76,6 +81,7 @@ PLATFORMS
 
 DEPENDENCIES
   activerecord
+  dmthis!
   linecache19 (= 0.5.13)
   log4r
   oauth

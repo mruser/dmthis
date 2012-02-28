@@ -1,3 +1,7 @@
+# encoding: UTF-8
+
+require 'active_record'
+
 class DMFollow < ActiveRecord::Base
   self.table_name = 'dmfollow'
 
