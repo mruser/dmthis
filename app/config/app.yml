@@ -1,0 +1,19 @@
+development:
+  twitter:
+    consumer_key: ''
+    consumer_secret: ''
+    main_oauth_token: ''
+    main_oauth_token_secret: ''
+    account_id: 
+    screen_name: ''
+    max_followers: 5
+live:
+  twitter:
+    consumer_key: ''
+    consumer_secret: ''
+    main_oauth_token: ''
+    main_oauth_token_secret: ''
+    account_id: 
+    screen_name: ''
+    max_followers: 5
+
