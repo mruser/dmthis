@@ -14,6 +14,7 @@ $logger = Log4r::Logger['main']
 UPDATE_USER_IDS_INTERVAL = 22
 def update_user_ids
   $user_ids_to_follow = DMFollow.select('DISTINCT rgt_id')
+                                .order('rgt_id')
                                 .collect { |inst| inst.rgt_id }
 end
 
@@ -150,7 +151,7 @@ def start_dmthis
       rescue HTTP::Parser::Error
         $logger.error("HTTP::Parser::Error #{$!}")
         # needs backoff method
-        dmclient.stop_stream
+        dmclient.stop
         next
       rescue
         running = false
@@ -165,7 +166,12 @@ def start_dmthis
   end
 
   lclient.on_interval(UPDATE_USER_IDS_INTERVAL) do
-    lclient.stop
+    # determine if we need to reload
+    old_ids = $user_ids_to_follow
+    update_user_ids
+    if $user_ids_to_follow != old_ids
+      lclient.stop
+    end
   end
 
   running = true
