@@ -151,7 +151,11 @@ def start_dmthis
       rescue HTTP::Parser::Error
         $logger.error("HTTP::Parser::Error #{$!}")
         # needs backoff method
-        dmclient.stop
+        begin
+          dmclient.stop
+        rescue
+          $logger.error("Already stopped: #{$!}")
+        end
         next
       rescue
         running = false
