@@ -157,6 +157,8 @@ def start_dmthis
           $logger.error("Already stopped: #{$!}")
         end
         next
+      rescue Interrupt
+        $logger.info("Interrupted, restarting")
       rescue
         running = false
         raise
@@ -187,6 +189,9 @@ def start_dmthis
       end
     rescue HTTP::Parser::Error
       $logger.error("HTTP::Parser::Error #{$!}")
+      next
+    rescue Interrupt
+      $logger.info("Interrupted, restarting")
       next
     rescue
       running = false
